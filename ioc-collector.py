@@ -15,6 +15,7 @@ def get_argparse():
     parser.add_argument('--init', action='store_true', help="initalize config.yaml.init")
     parser.add_argument('--urlscanio', action='store_true', help="urlscan.io submit")
     parser.add_argument('--twitter', action='store_true', help="twitter search")
+    parser.add_argument('--domainwatch', action='store_true', help="domainwatch search")
     parser.add_argument('-c', '--config', type=str, required=False,
                         help="yaml file")
     parser.add_argument('-u', '--url', type=str, required=False,
@@ -24,22 +25,26 @@ def get_argparse():
 
 def init_yaml():
     init_yaml = {
-        'twitter':
-            {
-                'apikey': "",
-                'apikeysecret': "",
-                'accesstoken': "",
-                'accesstokensecret': "",
-                'bearer': "",
-                'keywords': [
-                    "",
-                    ""
-                ]
-                },
-        'urlscanio':
-            {
-                'apikey': ""
-            }
+        'twitter': {
+            'apikey': "",
+            'apikeysecret': "",
+            'accesstoken': "",
+            'accesstokensecret': "",
+            'bearer': "",
+            'keywords': [
+                "",
+                ""
+            ]
+        },
+        'urlscanio': {
+            'apikey': ""
+        },
+        'domainwatch': {
+            'keywords': [
+                "",
+                ""
+            ]
+        }
     }
     print("- Saved initial yaml config file: " + str(init_yaml_filename))
     with open(init_yaml_filename, 'w') as f:
@@ -130,6 +135,19 @@ def run_twitter(args, config_dict):
     return set(list(results_all))  # list
 
 
+def run_domainwatch(args, config_dict):
+    url = "https://domainwat.ch/api/search?type=whois&"
+    query = "query=domain:*pay*"
+    headers = {
+        'Content-Type': 'application/json'
+        }
+    response = requests.get(
+        url + query,
+        headers=headers,
+        )
+    response_json = response.json()
+    print(json.dumps(response_json['results'][0], indent=4, sort_keys=True))
+
 def main():
     args = get_argparse()
     if args.init:
@@ -140,6 +158,8 @@ def main():
         run_urlscanio_one(args, config_dict)
     if args.twitter:
         run_urlscanio_batch(run_twitter(args, config_dict), config_dict)
+    if args.domainwatch:
+        run_domainwatch(args, config_dict)
 
 
 if __name__ == '__main__':
