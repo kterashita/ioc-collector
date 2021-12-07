@@ -1,0 +1,1 @@
+cat urlscan-py-1-input.db | sed -e 's/h..p.*\:\/\///g' -e 's/\[\.\]/\./g' -e 's/\/$//g' | tee urlscan-py-2-ready.db
