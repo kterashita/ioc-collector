@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import re
 import argparse
 import json
 import yaml
@@ -30,7 +31,11 @@ def init_yaml():
                 'apikeysecret': "",
                 'accesstoken': "",
                 'accesstokensecret': "",
-                'bearer': ""
+                'bearer': "",
+                'keywords': [
+                    "",
+                    ""
+                ]
                 },
         'urlscanio':
             {
@@ -53,7 +58,7 @@ def load_config(args):
     return config_yaml
 
 
-def run_urlscanio(args, config_dict):
+def run_urlscanio_one(args, config_dict):
     #
     # Ref: https://urlscan.io/docs/api/
     #
@@ -74,29 +79,56 @@ def run_urlscanio(args, config_dict):
     print(response.json())
 
 
-def run_twitter(args, config_dict):
+def run_urlscanio_batch(batch_list, config_dict):
     #
-    # Ref: https://docs.tweepy.org/en/stable/getting_started.html
+    # Ref: https://urlscan.io/docs/api/
     #
-    """
-    auth = tweepy.AppAuthHandler(
-        config_dict['twitter']['apikey'],
-        config_dict['twitter']['apikeysecret']
-        )
-    # auth.set_access_token(config_dict['twitter']['accesstoken'], config_dict['twitter']['accesstokensecret'])
-    api = tweepy.API(auth)
-    for tweet in tweepy.Cursor(api.search_tweets, q='tweepy').items(10):
-        print(tweet.text)
-    
+    headers = {
+        'API-Key': config_dict['urlscanio']['apikey'],
+        'Content-Type': 'application/json'
+        }
+    for url in batch_list:
+        data = {
+            "url": url,
+            "visibility": "public"
+            }
+        response = requests.post(
+            'https://urlscan.io/api/v1/scan/',
+            headers=headers,
+            data=json.dumps(data)
+            )
+        print(response.json())
 
-    client = tweepy.Client(
-        bearer_token=config_dict['twitter']['bearer'],
-        consumer_key=config_dict['twitter']['apikey'],
-        consumer_secret=config_dict['twitter']['apikeysecret'],
-        access_token=config_dict['twitter']['accesstoken'],
-        access_token_secret=config_dict['twitter']['accesstokensecret']
-        )
-    """
+
+def run_twitter(args, config_dict):
+    headers = {
+        "Authorization": "Bearer {}".format(config_dict['twitter']['bearer'])
+    }
+    url = "https://api.twitter.com/2/tweets/search/recent"
+    params_len = len(config_dict['twitter']['keywords'])
+
+    result = []
+    results = []
+    results_all = []
+
+    for j in range(params_len):
+        results = []
+        params = {'query': config_dict['twitter']['keywords'][j]}
+        r = requests.get(url, headers=headers, params=params)
+        tweets = r.json()
+                # print(json.dumps(tweets, indent=4))
+        for i in range(tweets['meta']['result_count']):
+            result = []
+            tweet = tweets['data'][i]['text']
+            tweet = re.sub('IP:', '', tweet)
+            tweet = re.sub(';', '', tweet)
+            for line in tweet.split():
+                if re.search('\.', line):
+                    if re.search('t.co', line) is None:
+                        result.append(line)
+            results.extend(result)
+        results_all.extend(results)
+    return set(list(results_all))  # list
 
 
 def main():
@@ -106,9 +138,9 @@ def main():
     if args.config:
         config_dict = load_config(args)
     if args.urlscanio:
-        run_urlscanio(args, config_dict)
+        run_urlscanio_one(args, config_dict)
     if args.twitter:
-        run_twitter(args, config_dict)
+        run_urlscanio_batch(run_twitter(args, config_dict), config_dict)
 
 
 if __name__ == '__main__':
