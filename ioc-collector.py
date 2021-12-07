@@ -5,7 +5,6 @@ import argparse
 import json
 import yaml
 import requests
-import tweepy
 
 init_yaml_filename = "config.yaml.init"
 
