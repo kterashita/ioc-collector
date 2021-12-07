@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+import os
 import re
+import time
 import argparse
 import json
 import yaml
@@ -13,7 +15,9 @@ def get_argparse():
         description="Help text of this command."
     )
     parser.add_argument('--init', action='store_true', help="initalize config.yaml.init")
-    parser.add_argument('--urlscanio', action='store_true', help="urlscan.io submit")
+    parser.add_argument('--urlscanioone', action='store_true', help="urlscan.io one submit")
+    parser.add_argument('--urlscanioresult', action='store_true', help="urlscan.io result")
+    parser.add_argument('-d', '--uuid', type=str, required=False, help="urlscan.io job uuid")
     parser.add_argument('--twitter', action='store_true', help="twitter search")
     parser.add_argument('--domainwatch', action='store_true', help="domainwatch search")
     parser.add_argument('-c', '--config', type=str, required=False,
@@ -79,11 +83,11 @@ def run_urlscanio_one(args, config_dict):
         headers=headers,
         data=json.dumps(data)
         )
-    print(response)
-    print(response.json())
+    # print(response.json()['uuid'])
 
 
 def run_urlscanio_batch(batch_list, config_dict):
+    result_list = []
     #
     # Ref: https://urlscan.io/docs/api/
     #
@@ -91,17 +95,55 @@ def run_urlscanio_batch(batch_list, config_dict):
         'API-Key': config_dict['urlscanio']['apikey'],
         'Content-Type': 'application/json'
         }
+    api_url = "https://urlscan.io/api/v1/scan/"
     for url in batch_list:
         data = {
             "url": url,
             "visibility": "public"
             }
         response = requests.post(
-            'https://urlscan.io/api/v1/scan/',
+            api_url,
             headers=headers,
             data=json.dumps(data)
             )
         print(response.json())
+        try:
+            result_list.append(response.json()['uuid'])
+        except:
+            pass
+    #
+    # output result after all submission
+    #
+    print("- waiting jobs finish")
+    time.sleep(10)
+    #
+    # Ref: https://urlscan.io/docs/api/#result
+    # > The most efficient approach would be to wait at least 10 seconds before starting to poll
+    #
+    for uuid in result_list:
+        run_urlscanio_result(uuid, config_dict)  # output result
+
+
+def run_urlscanio_result(uuid, config_dict):
+    result_dir_name = "urlscanio_results"
+    #
+    # Ref: https://urlscan.io/docs/api/
+    #
+    headers = {
+        'API-Key': config_dict['urlscanio']['apikey'],
+        'Content-Type': 'application/json'
+        }
+    api_url = "https://urlscan.io/api/v1/result/"
+    response = requests.get(
+        api_url + uuid + "/",
+        headers=headers,
+        )
+    response_json = response.json()
+    # print(json.dumps(response_json, indent=4))
+    if not os.path.exists(result_dir_name):
+        os.makedirs(result_dir_name)
+    with open(result_dir_name + "/" + uuid + ".json", "w") as outfile:
+        outfile.write(json.dumps(response_json['verdicts'], indent=4))
 
 
 def run_twitter(args, config_dict):
@@ -136,17 +178,18 @@ def run_twitter(args, config_dict):
 
 
 def run_domainwatch(args, config_dict):
-    url = "https://domainwat.ch/api/search?type=whois&"
+    api_url = "https://domainwat.ch/api/search?type=whois&"
     query = "query=domain:*pay*"
     headers = {
         'Content-Type': 'application/json'
         }
     response = requests.get(
-        url + query,
+        api_url + query,
         headers=headers,
         )
     response_json = response.json()
     print(json.dumps(response_json['results'][0], indent=4, sort_keys=True))
+
 
 def main():
     args = get_argparse()
@@ -154,8 +197,10 @@ def main():
         init_yaml()
     if args.config:
         config_dict = load_config(args)
-    if args.urlscanio:
+    if args.urlscanioone:
         run_urlscanio_one(args, config_dict)
+    if args.urlscanioresult:
+        run_urlscanio_result(args, config_dict)
     if args.twitter:
         run_urlscanio_batch(run_twitter(args, config_dict), config_dict)
     if args.domainwatch:
