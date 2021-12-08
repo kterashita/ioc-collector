@@ -17,7 +17,6 @@ def get_argparse():
     parser.add_argument('--init', action='store_true', help="initalize config.yaml.init")
     parser.add_argument('--urlscanioone', action='store_true', help="urlscan.io one submit")
     parser.add_argument('--urlscanioresult', action='store_true', help="urlscan.io result")
-    parser.add_argument('--urlscaniostats', action='store_true', help="urlscan.io stats")
     parser.add_argument('-d', '--uuid', type=str, required=False, help="urlscan.io job uuid")
     parser.add_argument('--twitter', action='store_true', help="twitter search")
     parser.add_argument('--domainwatch', action='store_true', help="domainwatch search")
@@ -45,6 +44,7 @@ def init_yaml():
             'apikey': ""
         },
         'domainwatch': {
+            'quantity': 0,
             'keywords': [
                 "",
                 ""
@@ -115,7 +115,7 @@ def run_urlscanio_batch(batch_list, config_dict):
     #
     # output result after all submission
     #
-    print("- waiting jobs finish")
+    print("\033[31m- waiting jobs finish\033[0m")
     time.sleep(10)
     #
     # Ref: https://urlscan.io/docs/api/#result
@@ -174,7 +174,7 @@ def run_twitter(args, config_dict):
             tweet = re.sub(';', '', tweet)
             for line in tweet.split():
                 if re.search('\.', line):
-                    if re.search('t.co', line) is None:
+                    if re.search("t.co|virustotal.com", line) is None:
                         result.append(line)
             results.extend(result)
         results_all.extend(results)
@@ -183,16 +183,24 @@ def run_twitter(args, config_dict):
 
 def run_domainwatch(args, config_dict):
     api_url = "https://domainwat.ch/api/search?type=whois&"
-    query = "query=domain:*pay*"
     headers = {
         'Content-Type': 'application/json'
         }
-    response = requests.get(
-        api_url + query,
-        headers=headers,
-        )
-    response_json = response.json()
-    print(json.dumps(response_json['results'][0], indent=4, sort_keys=True))
+    results_list = []
+
+    for j in range(len(config_dict['domainwatch']['keywords'])):
+        query = config_dict['domainwatch']['keywords'][j]
+        print("\033[31mkeyword: " + config_dict['domainwatch']['keywords'][j] + "\033[0m")
+        response = requests.get(
+            api_url + query,
+            headers=headers,
+            )
+        response_json = response.json()        
+        for i in range(config_dict['domainwatch']['quantity']):
+            results_list.append(response_json['results'][i]['domain'])
+            print("\033[31mdomain: " + response_json['results'][i]['domain'] + "\033[0m")
+
+    return set(results_list)
 
 
 def main():
@@ -205,12 +213,10 @@ def main():
         run_urlscanio_one(args, config_dict)
     if args.urlscanioresult:
         run_urlscanio_result(args, config_dict)
-    if args.urlscaniostats:
-        run_urlscanio_stats(args, config_dict)
     if args.twitter:
         run_urlscanio_batch(run_twitter(args, config_dict), config_dict)
     if args.domainwatch:
-        run_domainwatch(args, config_dict)
+        run_urlscanio_batch(run_domainwatch(args, config_dict), config_dict)
 
 
 if __name__ == '__main__':
