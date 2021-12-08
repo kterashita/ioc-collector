@@ -17,6 +17,7 @@ def get_argparse():
     parser.add_argument('--init', action='store_true', help="initalize config.yaml.init")
     parser.add_argument('--urlscanioone', action='store_true', help="urlscan.io one submit")
     parser.add_argument('--urlscanioresult', action='store_true', help="urlscan.io result")
+    parser.add_argument('--urlscaniostats', action='store_true', help="urlscan.io stats")
     parser.add_argument('-d', '--uuid', type=str, required=False, help="urlscan.io job uuid")
     parser.add_argument('--twitter', action='store_true', help="twitter search")
     parser.add_argument('--domainwatch', action='store_true', help="domainwatch search")
@@ -138,12 +139,15 @@ def run_urlscanio_result(uuid, config_dict):
         api_url + uuid + "/",
         headers=headers,
         )
-    response_json = response.json()
+    response_dict = response.json()
     # print(json.dumps(response_json, indent=4))
     if not os.path.exists(result_dir_name):
         os.makedirs(result_dir_name)
     with open(result_dir_name + "/" + uuid + ".json", "w") as outfile:
-        outfile.write(json.dumps(response_json['verdicts'], indent=4))
+        try:
+            outfile.write(response_dict['page']['url'] + ": " + response_dict['verdicts']['overall']['brands'][0])
+        except:
+            pass
 
 
 def run_twitter(args, config_dict):
@@ -201,6 +205,8 @@ def main():
         run_urlscanio_one(args, config_dict)
     if args.urlscanioresult:
         run_urlscanio_result(args, config_dict)
+    if args.urlscaniostats:
+        run_urlscanio_stats(args, config_dict)
     if args.twitter:
         run_urlscanio_batch(run_twitter(args, config_dict), config_dict)
     if args.domainwatch:
