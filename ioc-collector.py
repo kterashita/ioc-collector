@@ -176,8 +176,8 @@ def run_urlscanio_result(uuid, config_dict):
             success_list.append([response_dict['page']['url'], response_dict['verdicts']['overall']['brands'][0]])
         except:
             pass
-    for success_result in success_list:
-        print(success_result[0], success_result[1])
+    # for success_result in success_list:
+        # print(success_result[0], success_result[1])
 
 
 def run_twitter(args, config_dict):
