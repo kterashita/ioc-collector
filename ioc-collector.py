@@ -7,6 +7,9 @@ import argparse
 import json
 import yaml
 import requests
+import ipaddress
+from tqdm import tqdm
+
 
 init_yaml_filename = "config.yaml.init"
 
@@ -17,6 +20,7 @@ def get_argparse():
     parser.add_argument('--init', action='store_true', help="initalize config.yaml.init")
     parser.add_argument('--urlscanioone', action='store_true', help="urlscan.io one submit")
     parser.add_argument('--urlscanioresult', action='store_true', help="urlscan.io result")
+    parser.add_argument('--virustotal', action='store_true', help="virustotal test")
     parser.add_argument('-d', '--uuid', type=str, required=False, help="urlscan.io job uuid")
     parser.add_argument('--twitter', action='store_true', help="twitter search")
     parser.add_argument('--domainwatch', action='store_true', help="domainwatch search")
@@ -97,9 +101,14 @@ def run_urlscanio_batch(batch_list, config_dict):
         'Content-Type': 'application/json'
         }
     api_url = "https://urlscan.io/api/v1/scan/"
-    for url in batch_list:
+
+    # Indicator
+    print("\033[31m# Run: urlscanuio_batch()" + "\033[0m")
+    print("\033[31m# urlscan.io api call count: " + str(len(batch_list)) + "\033[0m")
+
+    for i_tqdm in tqdm(range(len(batch_list))):
         data = {
-            "url": url,
+            "url": batch_list[i_tqdm],
             "visibility": "public"
             }
         response = requests.post(
@@ -107,7 +116,7 @@ def run_urlscanio_batch(batch_list, config_dict):
             headers=headers,
             data=json.dumps(data)
             )
-        print(response.json())
+        # print(response.json())
         try:
             result_list.append(response.json()['uuid'])
         except:
@@ -115,14 +124,18 @@ def run_urlscanio_batch(batch_list, config_dict):
     #
     # output result after all submission
     #
-    print("\033[31m- waiting jobs finish\033[0m")
-    time.sleep(10)
+    # print("\033[31m- waiting jobs finish\033[0m")
+    # time.sleep(10)
     #
     # Ref: https://urlscan.io/docs/api/#result
     # > The most efficient approach would be to wait at least 10 seconds before starting to poll
     #
-    for uuid in result_list:
-        run_urlscanio_result(uuid, config_dict)  # output result
+
+    # for uuid in result_list:
+    #     run_urlscanio_result(uuid, config_dict)  # output result
+    print("\033[31m# Output results of scceeeded queries into local files \033[0m")
+    for i in tqdm(range(len(result_list))):
+        run_urlscanio_result(result_list[i], config_dict)  # output result
 
 
 def run_urlscanio_result(uuid, config_dict):
@@ -136,18 +149,23 @@ def run_urlscanio_result(uuid, config_dict):
         }
     api_url = "https://urlscan.io/api/v1/result/"
     response = requests.get(
-        api_url + uuid + "/",
+        api_url + str(uuid) + "/",
         headers=headers,
         )
     response_dict = response.json()
     # print(json.dumps(response_json, indent=4))
     if not os.path.exists(result_dir_name):
         os.makedirs(result_dir_name)
+    
+    success_list = []  # to output only success result to stdout
     with open(result_dir_name + "/" + uuid + ".json", "w") as outfile:
         try:
             outfile.write(response_dict['page']['url'] + ": " + response_dict['verdicts']['overall']['brands'][0])
+            success_list.append([response_dict['page']['url'], response_dict['verdicts']['overall']['brands'][0]])
         except:
             pass
+    for success_result in success_list:
+        print(success_result[0], success_result[1])
 
 
 def run_twitter(args, config_dict):
@@ -167,6 +185,8 @@ def run_twitter(args, config_dict):
         r = requests.get(url, headers=headers, params=params)
         tweets = r.json()
                 # print(json.dumps(tweets, indent=4))
+        # Indicator
+        print("\033[31m# Twitter Keyword Pattern:" + config_dict['twitter']['keywords'][j] + "\033[0m")
         for i in range(tweets['meta']['result_count']):
             result = []
             tweet = tweets['data'][i]['text']
@@ -174,11 +194,12 @@ def run_twitter(args, config_dict):
             tweet = re.sub(';', '', tweet)
             for line in tweet.split():
                 if re.search('\.', line):
-                    if re.search("t.co|virustotal.com", line) is None:
+                    if re.search("t.co|virustotal.com|…", line) is None:
                         result.append(line)
             results.extend(result)
+        print("\033[31m  # Hit count before merge:" + str(len(results)) + "\033[0m")
         results_all.extend(results)
-    return set(list(results_all))  # list
+    return list(set(list(results_all)))  # list
 
 
 def run_domainwatch(args, config_dict):
@@ -203,6 +224,35 @@ def run_domainwatch(args, config_dict):
     return set(results_list)
 
 
+def run_virustotal_ip_resolve(ip, config_dict):
+    print("\033[31m# [Test] run_virustotal_ip_resolve() \033[0m")
+    #
+    # Ref: https://developers.virustotal.com/reference/ip-relationships
+    #
+    api_url = "https://www.virustotal.com/api/v3/ip_addresses/"
+    api_ip = ip
+    api_limit = "/urls?limit=10"  # the limit should be revised if the total exceeds the urlscan.io api limit
+    headers = {
+        'Accept': 'application/json',
+        'x-apikey' : config_dict['virustotal']['apikey']
+        }
+    data = {
+        "url": api_url + api_ip + api_limit,
+        }
+    response = requests.get(
+        api_url + api_ip + api_limit,
+        headers=headers
+        )
+    response_dict = response.json()
+
+    # Indicator
+    print("\033[31m# Count: " + str(len(response_dict['data'])) + "\033[0m")
+    print("\033[31m# URL: " + str(response_dict['data'][0]['attributes']['url']) + "\033[0m")
+
+    for i in range(len(response_dict['data'])):
+        print("\033[31m# URL " + str(i) + ": " + str(response_dict['data'][i]['attributes']['url']) + "\033[0m")
+    
+
 def main():
     args = get_argparse()
     if args.init:
@@ -217,6 +267,8 @@ def main():
         run_urlscanio_batch(run_twitter(args, config_dict), config_dict)
     if args.domainwatch:
         run_urlscanio_batch(run_domainwatch(args, config_dict), config_dict)
+    if args.virustotal:
+        run_virustotal_ip_resolve("172.67.222.94", config_dict)
 
 
 if __name__ == '__main__':
