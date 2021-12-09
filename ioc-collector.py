@@ -104,11 +104,23 @@ def run_urlscanio_batch(batch_list, config_dict):
 
     # Indicator
     print("\033[31m# Run: urlscanuio_batch()" + "\033[0m")
-    print("\033[31m# urlscan.io api call count: " + str(len(batch_list)) + "\033[0m")
+    print("\033[31m# input iocs: " + str(len(batch_list)) + "\033[0m")
 
-    for i_tqdm in tqdm(range(len(batch_list))):
+    # Indicator
+    print("\033[31m# Enrich: virustotal_ip_resolve()" + "\033[0m")
+    batch_list_enrich = batch_list
+    for batch in batch_list:
+        try:
+            ip = ipaddress.ip_address(batch)
+            batch_list_enrich.extend(run_virustotal_ip_resolve(str(ip), config_dict))
+        except:
+            pass
+
+    print("\033[31m# urlscan.io api call count with vt enrichment: " + str(len(batch_list_enrich)) + "\033[0m")
+
+    for i_tqdm in tqdm(range(len(batch_list_enrich))):
         data = {
-            "url": batch_list[i_tqdm],
+            "url": batch_list_enrich[i_tqdm],
             "visibility": "public"
             }
         response = requests.post(
@@ -190,8 +202,10 @@ def run_twitter(args, config_dict):
         for i in range(tweets['meta']['result_count']):
             result = []
             tweet = tweets['data'][i]['text']
-            tweet = re.sub('IP:', '', tweet)
-            tweet = re.sub(';', '', tweet)
+            tweet = re.sub('IP:', ' ', tweet)
+            tweet = re.sub('\[', '', tweet)
+            tweet = re.sub('\]', '', tweet)
+            tweet = re.sub(';', ' ', tweet)
             for line in tweet.split():
                 if re.search('\.', line):
                     if re.search("t.co|virustotal.com|…", line) is None:
@@ -199,7 +213,7 @@ def run_twitter(args, config_dict):
             results.extend(result)
         print("\033[31m  # Hit count before merge:" + str(len(results)) + "\033[0m")
         results_all.extend(results)
-    return list(set(list(results_all)))  # list
+    return list(set(results_all))  # list
 
 
 def run_domainwatch(args, config_dict):
@@ -221,23 +235,33 @@ def run_domainwatch(args, config_dict):
             results_list.append(response_json['results'][i]['domain'])
             print("\033[31mdomain: " + response_json['results'][i]['domain'] + "\033[0m")
 
-    return set(results_list)
+    return list(set(results_list))
 
 
 def run_virustotal_ip_resolve(ip, config_dict):
-    print("\033[31m# [Test] run_virustotal_ip_resolve() \033[0m")
+    """
+    expected input:
+        ip:
+            - resolve target,
+            - ip address,
+            - str
+    expected output:
+        return:
+            - resolved recent urls upto specified limit,
+            - list
+    """
+    # print("\033[31m# Run: virustotal_ip_resolve() \033[0m")
     #
     # Ref: https://developers.virustotal.com/reference/ip-relationships
     #
     api_url = "https://www.virustotal.com/api/v3/ip_addresses/"
     api_ip = ip
-    api_limit = "/urls?limit=10"  # the limit should be revised if the total exceeds the urlscan.io api limit
+    api_limit = "/urls?limit=5"  # the limit should be revised if the total exceeds the urlscan.io api limit
+    result_list = []
+
     headers = {
         'Accept': 'application/json',
         'x-apikey' : config_dict['virustotal']['apikey']
-        }
-    data = {
-        "url": api_url + api_ip + api_limit,
         }
     response = requests.get(
         api_url + api_ip + api_limit,
@@ -245,13 +269,12 @@ def run_virustotal_ip_resolve(ip, config_dict):
         )
     response_dict = response.json()
 
-    # Indicator
-    print("\033[31m# Count: " + str(len(response_dict['data'])) + "\033[0m")
-    print("\033[31m# URL: " + str(response_dict['data'][0]['attributes']['url']) + "\033[0m")
-
-    for i in range(len(response_dict['data'])):
-        print("\033[31m# URL " + str(i) + ": " + str(response_dict['data'][i]['attributes']['url']) + "\033[0m")
+    for i in tqdm(range(len(response_dict['data']))):
+        # print("\033[31m# URL " + str(i) + ": " + str(response_dict['data'][i]['attributes']['url']) + "\033[0m")
+        result_list.append(str(response_dict['data'][i]['attributes']['url']))
     
+    return result_list  # list
+
 
 def main():
     args = get_argparse()
@@ -268,7 +291,7 @@ def main():
     if args.domainwatch:
         run_urlscanio_batch(run_domainwatch(args, config_dict), config_dict)
     if args.virustotal:
-        run_virustotal_ip_resolve("172.67.222.94", config_dict)
+        run_virustotal_ip_resolve("1.1.1.1", config_dict)
 
 
 if __name__ == '__main__':
