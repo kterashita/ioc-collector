@@ -9,6 +9,9 @@ import yaml
 import requests
 import ipaddress
 from tqdm import tqdm
+# virustotal_intelsearch()
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 
 init_yaml_filename = "config.yaml.init"
@@ -109,7 +112,7 @@ def run_urlscanio_batch(batch_list, config_dict):
     # Indicator
     print("\033[31m# Enrich: virustotal_ip_resolve()" + "\033[0m")
     batch_list_enrich = batch_list
-    for batch in batch_list:
+    for batch in batch_list:  # needs to be tqdm-ed, instad of vt()
         try:
             ip = ipaddress.ip_address(batch)
             batch_list_enrich.extend(run_virustotal_ip_resolve(str(ip), config_dict))
@@ -274,6 +277,33 @@ def run_virustotal_ip_resolve(ip, config_dict):
         result_list.append(str(response_dict['data'][i]['attributes']['url']))
     
     return result_list  # list
+
+
+def virustotal_intelsearch(query, config_dict):
+    """
+    expected input:
+        query:
+            - entity:url main_icon_dhash:HASH,
+            - entity:domain main_icon_dhash:HASH
+    process:
+        modules:
+            - selenium
+            - bs4
+    expected output:
+        return:
+            - found urls or domains,
+            - list
+    """
+    webdriver_path = ""
+    url = ""
+    
+    options = Options()
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-gpu')
+    driver = webdriver.Chrome(webdriver_path, chrome_options=options)
+    driver.get(url)
+
 
 
 def main():
