@@ -27,6 +27,7 @@ def get_argparse():
     parser.add_argument('-d', '--uuid', type=str, required=False, help="urlscan.io job uuid")
     parser.add_argument('--twitter', action='store_true', help="twitter search")
     parser.add_argument('--domainwatch', action='store_true', help="domainwatch search")
+    parser.add_argument('--virustotalsearch', action='store_true', help="virustotal intel search")
     parser.add_argument('-c', '--config', type=str, required=False,
                         help="yaml file")
     parser.add_argument('-u', '--url', type=str, required=False,
@@ -294,9 +295,9 @@ def virustotal_intelsearch(query, config_dict):
             - found urls or domains,
             - list
     """
-    webdriver_path = ""
-    url = ""
-    
+    webdriver_path = "/usr/bin/chromedriver"
+    url = "https://www.virustotal.com/"
+
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
@@ -322,6 +323,8 @@ def main():
         run_urlscanio_batch(run_domainwatch(args, config_dict), config_dict)
     if args.virustotal:
         run_virustotal_ip_resolve("1.1.1.1", config_dict)
+    if args.virustotalsearch:
+        virustotal_intelsearch("", config_dict)
 
 
 if __name__ == '__main__':
