@@ -3,6 +3,7 @@
 import os
 import re
 import time
+from datetime import datetime, timedelta
 import argparse
 import json
 import yaml
@@ -12,6 +13,8 @@ from tqdm import tqdm
 # virustotal_intelsearch()
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+import chromedriver_binary
+# from webdriver_manager.chrome import ChromeDriverManager
 
 
 init_yaml_filename = "config.yaml.init"
@@ -27,7 +30,7 @@ def get_argparse():
     parser.add_argument('-d', '--uuid', type=str, required=False, help="urlscan.io job uuid")
     parser.add_argument('--twitter', action='store_true', help="twitter search")
     parser.add_argument('--domainwatch', action='store_true', help="domainwatch search")
-    parser.add_argument('--virustotalsearch', action='store_true', help="virustotal intel search")
+    parser.add_argument('--vtsearchicon', action='store_true', help="virustotal intel search")
     parser.add_argument('-c', '--config', type=str, required=False,
                         help="yaml file")
     parser.add_argument('-u', '--url', type=str, required=False,
@@ -54,6 +57,13 @@ def init_yaml():
         'domainwatch': {
             'quantity': 0,
             'keywords': [
+                "",
+                ""
+            ]
+        },
+        'virustotal': {
+            'apikey': "",
+            'icon_dhash': [
                 "",
                 ""
             ]
@@ -96,10 +106,17 @@ def run_urlscanio_one(args, config_dict):
 
 
 def run_urlscanio_batch(batch_list, config_dict):
-    result_list = []
+    """
+    flow chart
+        import batch_list is default list to scan
+        enrich on batch_list_enrich which is added ip_resolve result of IP address in the batch_list
+        run loop urlscan with batch_list_enrich
+    """
     #
     # Ref: https://urlscan.io/docs/api/
     #
+    result_list = []
+
     headers = {
         'API-Key': config_dict['urlscanio']['apikey'],
         'Content-Type': 'application/json'
@@ -260,7 +277,7 @@ def run_virustotal_ip_resolve(ip, config_dict):
     #
     api_url = "https://www.virustotal.com/api/v3/ip_addresses/"
     api_ip = ip
-    api_limit = "/urls?limit=5"  # the limit should be revised if the total exceeds the urlscan.io api limit
+    api_limit = "/urls?limit=10"  # the limit should be revised if the total exceeds the urlscan.io api limit
     result_list = []
 
     headers = {
@@ -277,10 +294,13 @@ def run_virustotal_ip_resolve(ip, config_dict):
         # print("\033[31m# URL " + str(i) + ": " + str(response_dict['data'][i]['attributes']['url']) + "\033[0m")
         result_list.append(str(response_dict['data'][i]['attributes']['url']))
     
+    #
+    print(result_list)
+    #
     return result_list  # list
 
 
-def virustotal_intelsearch(query, config_dict):
+def virustotal_selenium(query, config_dict):
     """
     expected input:
         query:
@@ -295,16 +315,112 @@ def virustotal_intelsearch(query, config_dict):
             - found urls or domains,
             - list
     """
-    webdriver_path = "/usr/bin/chromedriver"
-    url = "https://www.virustotal.com/"
+    # webdriver_path = "/usr/local/lib/python3.8/site-packages/chromedriver_binary/chromedriver"
+    # print(os.environ["PATH"])
+    # print(ChromeDriverManager().install())
+    url = "https://www.virustotal.com/api/v3/intelligence/search"
 
     options = Options()
     options.add_argument('--headless')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-gpu')
-    driver = webdriver.Chrome(webdriver_path, chrome_options=options)
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument("--window-size=1920,1080")
+    driver = webdriver.Chrome(options=options)
+    # driver = webdriver.Chrome(executable_path=ChromeDriverManager().install(), options=options)
+    # driver = webdriver.Chrome()
+    # driver = webdriver.Chrome(executable_path=webdriver_path, chrome_options=options)
     driver.get(url)
+    
+    print(driver.title)
+    driver.close()
+    driver.quit()
 
+
+def vt_search_icon(config_dict):
+    """
+    expected input:
+        dhash:
+            - icon data dhash
+    expected output:
+        return:
+            - list
+    
+    flow chart
+        vt api calling
+            <- response
+                ['data'][0]['id'] = domain
+                append only first response into result_list
+                ['links']['next'] = url of next page for next 10 results
+            for loop by recursive to get after sedond result
+                result_list <- 10 domains, recursive times
+            return result_list
+    """
+    # print("\033[31m# Run: virustotal_ip_resolve() \033[0m")
+    #
+    # Ref: https://developers.virustotal.com/reference/ip-relationships
+    # Ref: https://github.com/VirusTotal/vt-py/blob/master/examples/search.py
+    api_url = "https://www.virustotal.com/api/v3/intelligence/search"
+    search_date_range = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+
+    result_list = []
+
+    headers = {
+        'Accept': 'application/json',
+        'x-apikey' : config_dict['virustotal']['apikey']
+        }
+    
+    recurusive = 1  # one request contains 10 results. recursive=2 gets 20 results.
+
+    # make query parameter fron config
+    query_icon = ""
+    for x in config_dict['virustotal']['icon_dhash']:
+        query_icon = query_icon + "main_icon_dhash:%s OR " % x
+    query_icon = re.sub(' OR $', '', query_icon)
+    query = 'entity:domain ( creation_date:"%s+" OR last_update_date:"%s+" ) (%s)' % (search_date_range, search_date_range, query_icon)
+    params = {
+        'query': query
+    }
+
+    # call vt api
+    response = requests.get(
+        api_url,
+        headers=headers,
+        params=params,
+        )
+    response_dict = response.json()
+
+    for i in tqdm(range(len(response_dict['data'])), ascii=True, desc="1     "):
+        result_list.append(response_dict['data'][i]['id'])
+    for i in tqdm(range(recurusive - 1), ascii=True, desc="2 to %s" % recurusive):
+        url_next = response_dict['links']['next']
+        response = requests.get(
+            url_next,
+            headers=headers,
+            )
+        response_dict = response.json()
+        for i in (range(len(response_dict['data']))):
+            result_list.append(response_dict['data'][i]['id'])
+        
+    print(set(result_list))
+    print(len(set(result_list)))
+
+    return result_list
+    """
+    for i in (range(len(response_dict['data']))):
+        print(response_dict['data'][i]['id'])
+    
+    print(response_dict['links']['next'])
+
+    url_next = response_dict['links']['next']
+    response = requests.get(
+        url_next,
+        headers=headers,
+        )
+    response_dict = response.json()
+    for i in (range(len(response_dict['data']))):
+        print(response_dict['data'][i]['id'])
+    """
 
 
 def main():
@@ -322,9 +438,9 @@ def main():
     if args.domainwatch:
         run_urlscanio_batch(run_domainwatch(args, config_dict), config_dict)
     if args.virustotal:
-        run_virustotal_ip_resolve("1.1.1.1", config_dict)
-    if args.virustotalsearch:
-        virustotal_intelsearch("", config_dict)
+        run_virustotal_ip_resolve("1.1.1.1", config_dict)  # option for test
+    if args.vtsearchicon:
+        run_urlscanio_batch(vt_search_icon(config_dict), config_dict)
 
 
 if __name__ == '__main__':
