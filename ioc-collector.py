@@ -29,6 +29,7 @@ def get_argparse():
     parser.add_argument('--virustotal', action='store_true', help="virustotal test")
     parser.add_argument('-d', '--uuid', type=str, required=False, help="urlscan.io job uuid")
     parser.add_argument('--twitter', action='store_true', help="twitter search")
+    parser.add_argument('--twitterip', action='store_true', help="twitter ip search")
     parser.add_argument('--domainwatch', action='store_true', help="domainwatch search")
     parser.add_argument('--vtsearchicon', action='store_true', help="virustotal intel search")
     parser.add_argument('-c', '--config', type=str, required=False,
@@ -370,7 +371,7 @@ def vt_search_icon(config_dict):
         'x-apikey' : config_dict['virustotal']['apikey']
         }
     
-    recurusive = 1  # one request contains 10 results. recursive=2 gets 20 results.
+    recurusive = 3  # one request contains 10 results. recursive=2 gets 20 results.
 
     # make query parameter fron config
     query_icon = ""
@@ -392,6 +393,11 @@ def vt_search_icon(config_dict):
 
     for i in tqdm(range(len(response_dict['data'])), ascii=True, desc="1     "):
         result_list.append(response_dict['data'][i]['id'])
+        # append subject anlternative names
+        try:
+            result_list.extend(response_dict['data'][i]['attributes']['last_https_certificate']['extensions']['subject_alternative_name'])
+        except:
+            pass
     for i in tqdm(range(recurusive - 1), ascii=True, desc="2 to %s" % recurusive):
         url_next = response_dict['links']['next']
         response = requests.get(
@@ -401,11 +407,13 @@ def vt_search_icon(config_dict):
         response_dict = response.json()
         for i in (range(len(response_dict['data']))):
             result_list.append(response_dict['data'][i]['id'])
+            # append subject anlternative names
+            try:
+                result_list.extend(response_dict['data'][i]['attributes']['last_https_certificate']['extensions']['subject_alternative_name'])
+            except:
+                pass
         
-    print(set(result_list))
-    print(len(set(result_list)))
-
-    return result_list
+    return set(result_list)
     """
     for i in (range(len(response_dict['data']))):
         print(response_dict['data'][i]['id'])
@@ -441,6 +449,18 @@ def main():
         run_virustotal_ip_resolve("1.1.1.1", config_dict)  # option for test
     if args.vtsearchicon:
         run_urlscanio_batch(vt_search_icon(config_dict), config_dict)
+    if args.twitterip:  # now testing
+        """
+        test_lists = run_twitter(args, config_dict)
+        test_ip_list = []
+        for test_list in test_lists:
+            try:
+                ip = ipaddress.ip_address(test_list)
+                test_ip_list.append(test_list)
+            except:
+                pass
+        print(test_ip_list)
+        """
 
 
 if __name__ == '__main__':
