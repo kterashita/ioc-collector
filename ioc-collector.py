@@ -444,7 +444,7 @@ def vt_search_icon(config_dict):
 
 def notify_teams(notify_text, config_dict):
     api_url = config_dict['teams']['webhook_url']
-    notify_text = "api test"
+    notify_text = "https://urlscan.io/result/" + notify_text
     notify_title = "urlscan.io result"
 
     headers = {
@@ -463,7 +463,7 @@ def notify_teams(notify_text, config_dict):
         post_json
         )
 
-    print("\033[31m# Run: notify_teams()" + "\033[0m")
+    print("\033[34m# Run: notify_teams()" + "\033[0m")
 
 def main():
     args = get_argparse()
