@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timedelta
 import argparse
 import json
+from requests import api
 import yaml
 import requests
 import ipaddress
@@ -32,6 +33,7 @@ def get_argparse():
     parser.add_argument('--twitterip', action='store_true', help="twitter ip search")
     parser.add_argument('--domainwatch', action='store_true', help="domainwatch search")
     parser.add_argument('--vtsearchicon', action='store_true', help="virustotal intel search")
+    parser.add_argument('--teams', action='store_true', help="teams call")
     parser.add_argument('-c', '--config', type=str, required=False,
                         help="yaml file")
     parser.add_argument('-u', '--url', type=str, required=False,
@@ -68,6 +70,9 @@ def init_yaml():
                 "",
                 ""
             ]
+        },
+        'teams': {
+            'webhook_url': ""
         }
     }
     print("- Saved initial yaml config file: " + str(init_yaml_filename))
@@ -196,6 +201,9 @@ def run_urlscanio_result(uuid, config_dict):
         try:
             outfile.write(response_dict['page']['url'] + ": " + response_dict['verdicts']['overall']['brands'][0])
             success_list.append([response_dict['page']['url'], response_dict['verdicts']['overall']['brands'][0]])
+            # Notify to MS Teams channel
+            notify_text = uuid + " " + response_dict['verdicts']['overall']['brands'][0]
+            notify_teams(notify_text, config_dict)
         except:
             pass
     # for success_result in success_list:
@@ -399,21 +407,24 @@ def vt_search_icon(config_dict):
         except:
             pass
     for i in tqdm(range(recurusive - 1), ascii=True, desc="2 to %s" % recurusive):
-        url_next = response_dict['links']['next']
-        response = requests.get(
-            url_next,
-            headers=headers,
-            )
-        response_dict = response.json()
-        for i in (range(len(response_dict['data']))):
-            result_list.append(response_dict['data'][i]['id'])
-            # append subject anlternative names
-            try:
-                result_list.extend(response_dict['data'][i]['attributes']['last_https_certificate']['extensions']['subject_alternative_name'])
-            except:
-                pass
+        try:
+            url_next = response_dict['links']['next']
+            response = requests.get(
+                url_next,
+                headers=headers,
+                )
+            response_dict = response.json()
+            for i in (range(len(response_dict['data']))):
+                result_list.append(response_dict['data'][i]['id'])
+                # append subject anlternative names
+                try:
+                    result_list.extend(response_dict['data'][i]['attributes']['last_https_certificate']['extensions']['subject_alternative_name'])
+                except:
+                    pass
+        except:
+            pass
         
-    return set(result_list)
+    return list(set(result_list))
     """
     for i in (range(len(response_dict['data']))):
         print(response_dict['data'][i]['id'])
@@ -430,6 +441,29 @@ def vt_search_icon(config_dict):
         print(response_dict['data'][i]['id'])
     """
 
+
+def notify_teams(notify_text, config_dict):
+    api_url = config_dict['teams']['webhook_url']
+    notify_text = "api test"
+    notify_title = "urlscan.io result"
+
+    headers = {
+        'Content-Type': 'application/json'
+        }
+
+    post_json = json.dumps(
+        {
+            'title': notify_title,
+            'text': notify_text
+        }
+    )
+
+    requests.post(
+        api_url,
+        post_json
+        )
+
+    print("\033[31m# Run: notify_teams()" + "\033[0m")
 
 def main():
     args = get_argparse()
@@ -461,6 +495,8 @@ def main():
                 pass
         print(test_ip_list)
         """
+    if args.teams:
+        notify_teams("text", config_dict)
 
 
 if __name__ == '__main__':
