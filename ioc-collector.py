@@ -202,8 +202,9 @@ def run_urlscanio_result(uuid, config_dict):
             outfile.write(response_dict['page']['url'] + ": " + response_dict['verdicts']['overall']['brands'][0])
             success_list.append([response_dict['page']['url'], response_dict['verdicts']['overall']['brands'][0]])
             # Notify to MS Teams channel
-            notify_text = uuid + " " + response_dict['verdicts']['overall']['brands'][0]
+            """notify_text = uuid + " " + response_dict['verdicts']['overall']['brands'][0]
             notify_teams(notify_text, config_dict)
+            """
         except:
             pass
     # for success_result in success_list:
