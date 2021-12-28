@@ -196,11 +196,11 @@ def run_urlscanio_result(uuid, config_dict):
     if not os.path.exists(result_dir_name):
         os.makedirs(result_dir_name)
     
-    success_list = []  # to output only success result to stdout
+    # success_list = []  # to output only success result to stdout
     with open(result_dir_name + "/" + uuid + ".json", "w") as outfile:
         try:
-            outfile.write(response_dict['page']['url'] + ": " + response_dict['verdicts']['overall']['brands'][0])
-            success_list.append([response_dict['page']['url'], response_dict['verdicts']['overall']['brands'][0]])
+            outfile.write(response_dict['page']['url'] + ": " + " ".join(response_dict['verdicts']['overall']['brands']))
+            # success_list.append([response_dict['page']['url'], response_dict['verdicts']['overall']['brands'][0]])
             # Notify to MS Teams channel
             """notify_text = uuid + " " + response_dict['verdicts']['overall']['brands'][0]
             notify_teams(notify_text, config_dict)
@@ -209,6 +209,10 @@ def run_urlscanio_result(uuid, config_dict):
             pass
     # for success_result in success_list:
         # print(success_result[0], success_result[1])
+    
+    # remove if brand is empty
+    if not response_dict['verdicts']['overall']['brands']:  # if 'brand' result is null
+        os.remove(result_dir_name + "/" + uuid + ".json")  # remove the report local file
 
 
 def run_twitter(args, config_dict):
