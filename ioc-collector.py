@@ -16,6 +16,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 import chromedriver_binary
 # from webdriver_manager.chrome import ChromeDriverManager
+import sqlite3
+import pandas as pd
 
 
 init_yaml_filename = "config.yaml.init"
@@ -73,6 +75,10 @@ def init_yaml():
         },
         'teams': {
             'webhook_url': ""
+        },
+        'sqlite': {
+            'db_name': "",
+            'table_name': ""
         }
     }
     print("- Saved initial yaml config file: " + str(init_yaml_filename))
@@ -178,6 +184,8 @@ def run_urlscanio_batch(batch_list, config_dict):
 
 
 def run_urlscanio_result(uuid, config_dict):
+    values_dict_list = []  # dict list to run sql_add()
+
     result_dir_name = "urlscanio_results"
     #
     # Ref: https://urlscan.io/docs/api/
@@ -205,6 +213,15 @@ def run_urlscanio_result(uuid, config_dict):
             """notify_text = uuid + " " + response_dict['verdicts']['overall']['brands'][0]
             notify_teams(notify_text, config_dict)
             """
+            # make dict list to run sql_add()
+            values_dict = {
+                'uuid': uuid,
+                'brand': " ".join(response_dict['verdicts']['overall']['brands']),
+                'task_time': response_dict['task']['time'],
+                'url': response_dict['page']['url'],
+                'ips': " ".join(response_dict['lists']['ips'])
+            }
+            values_dict_list.append(values_dict)  # collecting dict list to pass to sql_add()
         except:
             pass
     # for success_result in success_list:
@@ -213,6 +230,9 @@ def run_urlscanio_result(uuid, config_dict):
     # remove if brand is empty
     if not response_dict['verdicts']['overall']['brands']:  # if 'brand' result is null
         os.remove(result_dir_name + "/" + uuid + ".json")  # remove the report local file
+    
+    # to add results into .db
+    sql_add(values_dict_list, config_dict)
 
 
 def run_twitter(args, config_dict):
@@ -446,6 +466,58 @@ def vt_search_icon(config_dict):
         print(response_dict['data'][i]['id'])
     """
 
+""" SQLITE Part
+"""
+def sql_add(values_dict_list, config_dict):
+    """ excepted format of values_dict_list
+    # multiple entry
+    [
+        {
+            'uuid': "",
+            'brand': [""],  # " ".join(list)
+            'task_time': ""
+        },
+        {
+            'uuid': "",
+            'brand': [""],  # " ".join(list)
+            'task_time': ""
+        }
+    ]
+    """
+    # print func header
+    # print("\033[34m# Run: sql_add()" + "\033[0m")
+
+    # setup db
+    db_name = config_dict['sqlite']['db_name']
+    table_name = config_dict['sqlite']['table_name']
+    conn = sqlite3.connect(db_name)
+    conn_cur = conn.cursor()
+
+    # query add loop
+    for dict in values_dict_list:
+        value_uuid = dict['uuid']
+        value_brand = dict['brand']
+        value_task_time = dict['task_time']
+        value_url = dict['url']
+        value_ips = dict['ips']
+        conn_cur.execute(f'''INSERT INTO {table_name} values(
+            '{value_uuid}',
+            '{value_brand}',
+            '{value_task_time}',
+            '{value_url}',
+            '{value_ips}',
+            0,
+            0
+            )''')
+    conn.commit()
+
+    # close db
+    conn_cur.close()
+    conn.close()
+
+
+""" Notification Part
+"""
 
 def notify_teams(notify_text, config_dict):
     api_url = config_dict['teams']['webhook_url']
@@ -469,6 +541,7 @@ def notify_teams(notify_text, config_dict):
         )
 
     print("\033[34m# Run: notify_teams()" + "\033[0m")
+
 
 def main():
     args = get_argparse()
