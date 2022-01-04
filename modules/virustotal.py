@@ -1,6 +1,5 @@
 import requests
 import ipaddress
-from tqdm import tqdm
 
 
 def enrich_ip(ip, config_dict):
@@ -48,11 +47,11 @@ def enrich_ip(ip, config_dict):
             headers=headers
             )
         response_dict = response.json()
-        for i in tqdm(range(len(response_dict['data']))):
+        for i in range(len(response_dict['data'])):
             # print("\033[31m# URL " + str(i) + ": " + str(response_dict['data'][i]['attributes']['url']) + "\033[0m")
             result_list.append(str(response_dict['data'][i]['attributes']['url']))
         #
-        print(result_list)
+        # print(result_list)
         #
         return result_list  # list
     except:

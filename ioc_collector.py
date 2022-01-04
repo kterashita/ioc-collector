@@ -3,6 +3,7 @@
 from modules import default, twitter, virustotal
 
 import argparse
+from tqdm import tqdm
 
 
 def get_argparse():
@@ -14,6 +15,29 @@ def get_argparse():
     parser.add_argument('-a', '--action', type=str, required=False, help="action flag: [urlscan]")
     parser.add_argument('-s', '--source', type=str, required=False, help="source flag: [twitter]")
     return parser.parse_args()
+
+
+def urlscan_twitter(args, config_dict):
+    # get response from twitter search
+    result_list = twitter.search(args, config_dict)
+    # print(result_list)
+    # output ${result_list} is list
+
+    # enrich by virustotal ip resolve, call func with one by one
+    result_list_enrich = []
+    for x in tqdm(range(len(result_list)), desc='enrichment by vt'):
+        enriched_text = virustotal.enrich_ip(result_list[x], config_dict)
+        if type(enriched_text) is str:
+            result_list_enrich.append(enriched_text)
+        elif type(enriched_text) is list:
+            result_list_enrich.extend(enriched_text)
+
+    message = f'# Hit count after merge: {len(result_list_enrich)}.'
+    print("\033[34m" + message + "\033[0m")
+    # print(result_list_enrich)
+    # output ${result_list_enrich} is list
+
+
 
 
 def main():
@@ -35,22 +59,12 @@ def main():
     # action is urlscan, source is twitter
     if args.action == 'urlscan':
         if args.source == 'twitter':
-            result_list = twitter.search(args, config_dict)
-            print(result_list)
-
-            result_list_enrich = []
-            for x in result_list:
-                enriched_text = virustotal.enrich_ip(x, config_dict)
-                if type(enriched_text) is str:
-                    result_list_enrich.append(enriched_text)
-                elif type(enriched_text) is list:
-                    result_list_enrich.extend(enriched_text)
-            print(result_list_enrich)
+            urlscan_twitter(args, config_dict)
         else:
             message = f'Please specify a valid -s option.'
             print("\033[31m" + message + "\033[0m")
             exit()
-            
+        
 
 if __name__ == '__main__':
     main()
