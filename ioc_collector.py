@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from modules import default, twitter, virustotal
+from modules import default, twitter, virustotal, urlscan, sqlite
 
 import argparse
 from tqdm import tqdm
@@ -18,6 +18,16 @@ def get_argparse():
 
 
 def urlscan_twitter(args, config_dict):
+    """
+    input:
+      - options to triger
+    run:
+      - twitter.search() -> list of ioc
+      - virustotal.enrich_ip() -> list of enriched ioc
+      - urlscan.publicscan() -> list of succeeded uuid
+    return:
+      - list of succeeded uuid
+    """
     # get response from twitter search
     result_list = twitter.search(args, config_dict)
     # print(result_list)
@@ -37,7 +47,17 @@ def urlscan_twitter(args, config_dict):
     # print(result_list_enrich)
     # output ${result_list_enrich} is list
 
+    # input succeeded uuid including both brand and no brand
+    succeeded_uuid_list = urlscan.publicscan(result_list_enrich, config_dict)
 
+    # loop to retrieve results which has 'brand' result
+    # for uuid in succeeded_uuid_list:
+    # values_dict_list = [urlscan.result(uuid, config_dict) for uuid in succeeded_uuid_list]
+    values_dict_list = [urlscan.result(uuid, config_dict) for uuid in succeeded_uuid_list if urlscan.result(uuid, config_dict)]
+
+    # call sqlite to write into database
+    for values_dict in tqdm(values_dict_list, desc='writing result to db'):
+        sqlite.add(values_dict, config_dict)
 
 
 def main():
@@ -59,12 +79,16 @@ def main():
     # action is urlscan, source is twitter
     if args.action == 'urlscan':
         if args.source == 'twitter':
-            urlscan_twitter(args, config_dict)
+            uuid_list = urlscan_twitter(args, config_dict)
+            """ will be obsoluted
+            for uuid in uuid_list:
+                urlscan.result(uuid, config_dict)
+            """
         else:
             message = f'Please specify a valid -s option.'
             print("\033[31m" + message + "\033[0m")
             exit()
-        
+    
 
 if __name__ == '__main__':
     main()
