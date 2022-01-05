@@ -27,6 +27,36 @@ def initdb(config_dict):
     conn.close()
 
 
+def print_all(args, config_dict):
+    # setup
+    db_name = config_dict['sqlite']['db_name']
+    table_name = config_dict['sqlite']['table_name']
+    conn = sqlite3.connect(db_name)
+    conn_cur = conn.cursor()
+
+    # indicator
+    message = f'# Run: sqlite.print_all(): {db_name}.'
+    print("\033[34m" + message + "\033[0m")
+
+    # setup filter
+    if args.source == 'all':
+        column = '*'
+    else:
+        column = args.source
+
+    # setup pandas
+    pd.set_option('display.max_columns', 999)
+    pd.set_option('display.max_rows', 999)
+
+    # print db
+    df = pd.read_sql(f'SELECT {column} FROM {table_name}', conn)
+    print(df)
+
+    # close db
+    conn_cur.close()
+    conn.close()
+
+
 def add(values_dict, config_dict):
     """
     input:

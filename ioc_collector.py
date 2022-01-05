@@ -79,13 +79,20 @@ def main():
     # action is urlscan, source is twitter
     if args.action == 'urlscan':
         if args.source == 'twitter':
-            uuid_list = urlscan_twitter(args, config_dict)
+            urlscan_twitter(args, config_dict)
             """ will be obsoluted
             for uuid in uuid_list:
                 urlscan.result(uuid, config_dict)
             """
         else:
-            message = f'Please specify a valid -s option.'
+            message = f'Please specify a valid -s option. [twitter]'
+            print("\033[31m" + message + "\033[0m")
+            exit()
+    elif args.action == 'sqlite':
+        if args.source:
+            sqlite.print_all(args, config_dict)
+        else:
+            message = f'Please specify a valid -s option. [all][uuid|brand|task_time|url...]'
             print("\033[31m" + message + "\033[0m")
             exit()
     
